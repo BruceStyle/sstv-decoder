@@ -20,7 +20,7 @@
       copy_btn: "复制",
       copied_btn: "已复制",
       cmd_install: "npx skills add BruceStyle/sstv-decoder",
-      cmd_prompt: "帮我解码 ~/Desktop/iss-pass.m4a 里的国际空间站 SSTV 图片",
+      cmd_prompt: "帮我安装 SSTV 解码插件：https://github.com/BruceStyle/sstv-decoder",
       compat_line: "适用于 Claude Code · Cursor · Codex · Antigravity · Gemini CLI 等 75+ 个 Agent",
       footnote_req: "需要 FFmpeg 与 uv",
       signal_tag: "02 · 信号原理",
@@ -109,12 +109,12 @@
       hero_title_1: "Turn space station radio",
       hero_title_2: "into pictures",
       hero_subtitle: "Record an ISS pass, hand the audio to your AI agent, and get the original 320×240 image back, line by line.",
-      tab_install: "Install",
-      tab_prompt: "Ask your agent",
+      tab_install: "Terminal",
+      tab_prompt: "Ask AI",
       copy_btn: "Copy",
       copied_btn: "Copied",
       cmd_install: "npx skills add BruceStyle/sstv-decoder",
-      cmd_prompt: "Decode the ISS SSTV frames inside ~/Desktop/iss-pass.m4a",
+      cmd_prompt: "Install the SSTV decoder plugin from https://github.com/BruceStyle/sstv-decoder",
       compat_line: "Works with Claude Code · Cursor · Codex · Antigravity · Gemini CLI and 75+ agents",
       footnote_req: "Requires FFmpeg & uv",
       signal_tag: "02 · How the signal works",
@@ -228,10 +228,11 @@
   const scanCtx = scanCanvas.getContext("2d");
   const waterfallCtx = waterfallCanvas.getContext("2d");
 
+  const cmdBar = document.querySelector("#install .cmd-bar");
   const cmdPrefix = document.getElementById("cmd-prefix");
   const cmdText = document.getElementById("cmd-text");
   const copyBtn = document.getElementById("copy-btn");
-  const cmdTabs = Array.from(document.querySelectorAll(".cmd-tab"));
+  const cmdTabs = Array.from(document.querySelectorAll("#install .cmd-tab"));
   const langBtns = Array.from(document.querySelectorAll(".lang-btn"));
 
   const thumbWrap = document.getElementById("thumb-wrap");
@@ -589,6 +590,7 @@
   // Command Tabs & Copy
   function syncCommandBlock() {
     const dict = I18N[currentLang] || I18N["zh-CN"];
+    if (cmdBar) cmdBar.classList.toggle("is-prompt", cmdMode === "prompt");
     cmdPrefix.textContent = cmdMode === "prompt" ? ">" : "$";
     cmdText.textContent = cmdMode === "prompt" ? dict.cmd_prompt : dict.cmd_install;
     copyBtn.textContent = dict.copy_btn;
@@ -965,19 +967,56 @@
     };
   }
 
+  const EARTH_R_KM = 6371;
+  const ISS_ALT_KM = 420;
+  const ORBIT_R_KM = EARTH_R_KM + ISS_ALT_KM;
+  const PASS_EL_MAX_RAD = (68 * Math.PI) / 180;
+  const PASS_AZ_TCA_RAD = (45 * Math.PI) / 180;   // NE
+  const PASS_AZ_TRACK_RAD = (135 * Math.PI) / 180; // NW -> SE
+  const PASS_ALPHA0 = Math.acos((EARTH_R_KM / ORBIT_R_KM) * Math.cos(PASS_EL_MAX_RAD)) - PASS_EL_MAX_RAD;
+  const PASS_PSI_MAX = Math.acos(EARTH_R_KM / (ORBIT_R_KM * Math.cos(PASS_ALPHA0)));
+  const ISS_OMEGA_RAD_S = Math.sqrt(398600.4418 / (ORBIT_R_KM * ORBIT_R_KM * ORBIT_R_KM));
+  const RX_FREQ_KHZ = 145800;
+  const SPEED_OF_LIGHT_KMS = 299792.458;
+
   function passPoint(t) {
-    const az = (315 + 180 * t) % 360;
-    const el = 68 * Math.sin(Math.PI * t);
+    const psi = (2 * t - 1) * PASS_PSI_MAX;
+    const cosPsi = Math.cos(psi);
+    const sinPsi = Math.sin(psi);
+    const u = ORBIT_R_KM * sinPsi;
+    const v = ORBIT_R_KM * cosPsi * Math.sin(PASS_ALPHA0);
+    const w = ORBIT_R_KM * cosPsi * Math.cos(PASS_ALPHA0) - EARTH_R_KM;
+    const horiz = Math.hypot(u, v);
+    const el = Math.max(0, (Math.atan2(w, horiz) * 180) / Math.PI);
+    const east = u * Math.sin(PASS_AZ_TRACK_RAD) + v * Math.sin(PASS_AZ_TCA_RAD);
+    const north = u * Math.cos(PASS_AZ_TRACK_RAD) + v * Math.cos(PASS_AZ_TCA_RAD);
+    const az = ((Math.atan2(east, north) * 180) / Math.PI + 360) % 360;
+    const slant = Math.hypot(horiz, w);
+    const rangeRate = ((EARTH_R_KM * ORBIT_R_KM * Math.cos(PASS_ALPHA0) * sinPsi) / slant) * ISS_OMEGA_RAD_S;
+    const df = -RX_FREQ_KHZ * (rangeRate / SPEED_OF_LIGHT_KMS);
     const pos = polarToXY(el, az, 100);
-    return { az, el, x: pos.x, y: pos.y };
+    return { az, el, df, x: pos.x, y: pos.y };
   }
 
   let trailPath = null;
   let trailGlowPath = null;
   let trailTotalLen = 0;
+  let trailCumLen = [0];
+  let trailSteps = 160;
   let issHalo = null;
   let issDot = null;
   let issLabel = null;
+
+  function trailLenAt(t) {
+    const clamped = Math.max(0, Math.min(1, t));
+    const idxFloat = clamped * trailSteps;
+    const i0 = Math.floor(idxFloat);
+    const i1 = Math.min(trailSteps, i0 + 1);
+    const frac = idxFloat - i0;
+    const approx = trailCumLen[i0] + (trailCumLen[i1] - trailCumLen[i0]) * frac;
+    const totalApprox = trailCumLen[trailSteps] || 1;
+    return approx * (trailTotalLen / totalApprox);
+  }
 
   function buildSkyChart() {
     if (!skyGrid || !skyTrack || !skyMarkers || !skyIss) return;
@@ -1081,12 +1120,18 @@
       skyGrid.append(t);
     }
 
-    // Trajectory path (120 segments)
+    // Trajectory path (160 segments)
     let d = "";
-    const steps = 120;
+    const steps = trailSteps;
+    trailCumLen = [0];
+    let prevPt = null;
     for (let i = 0; i <= steps; i++) {
       const p = passPoint(i / steps);
       d += (i === 0 ? "M" : "L") + `${p.x.toFixed(2)} ${p.y.toFixed(2)}`;
+      if (prevPt) {
+        trailCumLen.push(trailCumLen[i - 1] + Math.hypot(p.x - prevPt.x, p.y - prevPt.y));
+      }
+      prevPt = p;
     }
 
     skyTrack.append(
@@ -1124,9 +1169,9 @@
 
     // AOS / TCA / LOS markers
     const milestones = [
-      { t: 0, text: "AOS 18:42:10", dx: -4, dy: -3, anchor: "end" },
+      { t: 0, text: "AOS 18:42:10", dx: 4, dy: -3.5, anchor: "start" },
       { t: 0.5, text: "TCA 18:47:05 · 68°", dx: 4, dy: -3.5, anchor: "start" },
-      { t: 1, text: "LOS 18:52:00", dx: -3.5, dy: 5.5, anchor: "end" }
+      { t: 1, text: "LOS 18:52:00", dx: -4, dy: 5.5, anchor: "end" }
     ];
     for (const m of milestones) {
       const pt = passPoint(m.t);
@@ -1183,7 +1228,7 @@
 
   function renderCoverState(t) {
     const pt = passPoint(t);
-    const offset = trailTotalLen * (1 - t);
+    const offset = Math.max(0, trailTotalLen - trailLenAt(t));
     if (trailPath) trailPath.style.strokeDashoffset = `${offset.toFixed(2)}`;
     if (trailGlowPath) trailGlowPath.style.strokeDashoffset = `${offset.toFixed(2)}`;
 
@@ -1201,8 +1246,7 @@
     if (passReadoutEl) {
       const azStr = String(Math.round(pt.az) % 360).padStart(3, "0");
       const elStr = String(Math.round(pt.el)).padStart(2, "0");
-      const df = (3.4 * -Math.tanh(6 * (t - 0.5))) / Math.tanh(3);
-      const roundedDf = Math.abs(df) < 0.05 ? 0 : df;
+      const roundedDf = Math.abs(pt.df) < 0.05 ? 0 : pt.df;
       const sign = roundedDf >= 0 ? "+" : "-";
       const dfAbs = Math.abs(roundedDf).toFixed(1);
       passReadoutEl.textContent = `AZ ${azStr}° · EL ${elStr}° · Δf ${sign}${dfAbs} kHz · ${formatPassTime(t)}`;
