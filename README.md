@@ -1,6 +1,6 @@
 # SSTV Decoder
 
-[English](README.md) | [简体中文](README.zh-CN.md) | [Project Showcase (`docs/`)](docs/index.html)
+[English](README.md) | [简体中文](README.zh-CN.md) | [Live Showcase (`sstv-decoder.netlify.app`)](https://sstv-decoder.netlify.app) ([`docs/`](docs/index.html))
 
 **A cross-agent open-source Robot 36 SSTV audio decoder** for amateur radio operators and ISS / ARISS satellite listeners.
 

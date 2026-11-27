@@ -1,6 +1,6 @@
 # SSTV Decoder · 跨平台通用慢扫描电视解码插件
 
-[English](README.md) | [简体中文](README.zh-CN.md) | [宣传与作者展示页（`docs/`）](docs/index.html)
+[English](README.md) | [简体中文](README.zh-CN.md) | [在线展示页（`sstv-decoder.netlify.app`）](https://sstv-decoder.netlify.app)（源码见 [`docs/`](docs/index.html)）
 
 面向国际空间站（ISS / ARISS）过境监听与业余无线电爱好者的**通用开源 Robot 36 SSTV 音频解码插件**。
 
