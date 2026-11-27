@@ -1278,7 +1278,7 @@
     coverLastTs = ts;
 
     if (coverT < 1) {
-      coverT = Math.min(1, coverT + dt / 16000);
+      coverT = Math.min(1, coverT + dt / 24000);
       ringAccumMs += dt;
       if (ringAccumMs >= 2200) {
         ringAccumMs %= 2200;
