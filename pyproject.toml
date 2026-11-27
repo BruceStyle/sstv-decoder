@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sstv-decoder"
+version = "0.1.0"
+description = "Cross-agent Robot 36 SSTV audio decoder with local stdio MCP, remote Streamable HTTP MCP, CLI, and Agent Skill."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+authors = [
+    { name = "BruceStyle" },
+]
+keywords = [
+    "sstv",
+    "robot36",
+    "iss",
+    "ariss",
+    "amateur-radio",
+    "mcp",
+    "agent-skill",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Communications :: Ham Radio",
+    "Topic :: Multimedia :: Sound/Audio :: Analysis",
+]
+dependencies = [
+    "httpx>=0.28,<1",
+    "mcp>=1.26,<2",
+    "numpy>=1.26,<3",
+    "pillow>=10,<14",
+    "pydantic>=2,<3",
+    "scipy>=1.12,<2",
+    "starlette>=0.45,<2",
+    "uvicorn>=0.34,<1",
+]
+
+[project.optional-dependencies]
+vercel = [
+    "vercel>=0.13.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/BruceStyle/sstv-decoder"
+Repository = "https://github.com/BruceStyle/sstv-decoder"
+Issues = "https://github.com/BruceStyle/sstv-decoder/issues"
+
+[project.scripts]
+sstv-decoder = "sstv_decoder.cli:main"
+sstv-decoder-mcp = "sstv_decoder.mcp_stdio:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+sstv_decoder = ["result.html", "assets/*.png"]

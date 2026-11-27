@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SSTV Decoder · 抬头，就能收到来自太空的画面</title>
+  <meta name="description" content="录下国际空间站过境时的 SSTV 音频，交给你的 AI。开源跨 Agent 解码插件，自动定位 Robot 36 识别头，逐行还原 320×240 图像。">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230b0c0e'/%3E%3Crect x='9' y='9' width='14' height='14' fill='%23ff5b24'/%3E%3C/svg%3E">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="SSTV Decoder · 抬头，就能收到来自太空的画面">
+  <meta property="og:description" content="录下国际空间站过境时的 SSTV 音频，交给你的 AI。开源跨 Agent 解码插件，自动定位 Robot 36 识别头，逐行还原 320×240 图像。">
+  <meta property="og:image" content="https://brucestyle.github.io/sstv-decoder/assets/decoded-iss-2026-10-06.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="#top">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">SSTV DECODER</span>
+      </a>
+      <nav class="site-nav" aria-label="主导航">
+        <a href="#receive" data-i18n="nav_receive">接收</a>
+        <a href="#signal" data-i18n="nav_signal">原理</a>
+        <a href="#captures" data-i18n="nav_captures">档案</a>
+        <a href="#access" data-i18n="nav_access">接入</a>
+        <a href="#about" data-i18n="nav_about">作者</a>
+        <div class="lang-switch" role="group" aria-label="语言切换">
+          <button type="button" class="lang-btn" data-lang="zh-CN" aria-pressed="true">中</button>
+          <span class="lang-sep" aria-hidden="true">/</span>
+          <button type="button" class="lang-btn" data-lang="en" aria-pressed="false">EN</button>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <!-- 第一屏：封面 / 愿景（头顶的一次过境） -->
+    <section class="cover" id="top" aria-labelledby="cover-title">
+      <canvas class="cover-stars" id="cover-stars" aria-hidden="true"></canvas>
+      <div class="cover-glow" aria-hidden="true"></div>
+      <svg class="sky-chart" id="sky-chart" viewBox="-130 -130 260 260" aria-hidden="true">
+        <g id="sky-grid"></g>
+        <g id="sky-track"></g>
+        <g id="sky-rings"></g>
+        <g id="sky-markers"></g>
+        <g id="sky-iss"></g>
+      </svg>
+      <span class="chart-note" data-i18n="chart_note">示意过境轨迹</span>
+
+      <div class="container cover-inner">
+        <h1 class="cover-title" id="cover-title"><span data-i18n="cover_title_1">抬头，</span> <span data-i18n="cover_title_2">就能收到来自太空的画面</span></h1>
+        <p class="cover-lead" data-i18n="cover_lead">国际空间站每 92 分钟绕地球一圈。ARISS 活动期间，它会用无线电向地面播送图片。一台手台就能收到，剩下的交给 AI。</p>
+        <a class="cover-cta" href="#receive">
+          <span data-i18n="cover_cta">开始接收</span>
+          <span class="cta-arrow" aria-hidden="true">↓</span>
+        </a>
+      </div>
+
+      <div class="cover-strip container">
+        <span>RX 145.800 MHz FM · ARISS SSTV</span>
+        <span id="pass-readout">AZ 315° · EL 00° · Δf +3.4 kHz · 18:42:10</span>
+      </div>
+    </section>
+
+    <!-- 第二屏：信号即界面（接收） -->
+    <section class="hero" id="receive" aria-labelledby="hero-title">
+      <div class="grid-guides" aria-hidden="true">
+        <span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span>
+      </div>
+
+      <div class="container hero-inner">
+        <div class="dateline">
+          <span class="dateline-left">01 · RX 145.800 MHz FM · ROBOT 36 · VIS 08</span>
+          <span class="dateline-right" id="pass-meta">2026-10-06 下午过境 · NA1SS · 同步 98.3%</span>
+        </div>
+
+        <h2 class="hero-title" id="hero-title">
+          <span data-i18n="hero_title_1">把空间站的电波</span><span data-i18n="hero_title_2">解成画面</span>
+        </h2>
+
+        <div class="stage">
+          <!-- (a) 监视器 -->
+          <div class="monitor">
+            <div class="stage-bar monitor-meta">
+              <span id="monitor-channel">CH R · ROBOT 36</span>
+              <span>320 × 240</span>
+            </div>
+            <div class="monitor-frame">
+              <canvas id="hero-scan-canvas" aria-label="国际空间站 SSTV 逐行扫描监视器"></canvas>
+              <span class="crop-mark tl" aria-hidden="true"></span>
+              <span class="crop-mark tr" aria-hidden="true"></span>
+              <span class="crop-mark bl" aria-hidden="true"></span>
+              <span class="crop-mark br" aria-hidden="true"></span>
+            </div>
+            <div class="stage-bar monitor-readout">
+              <span id="hero-line-readout">LINE 000 / 240</span>
+              <span id="hero-freq-readout">Y 1500 Hz</span>
+            </div>
+          </div>
+
+          <!-- (b) 瀑布条 -->
+          <div class="waterfall" aria-hidden="true">
+            <div class="stage-bar waterfall-scale">
+              <span>1200</span>
+              <span>1500</span>
+              <span>2300</span>
+            </div>
+            <div class="waterfall-frame">
+              <canvas id="hero-waterfall-canvas"></canvas>
+            </div>
+            <div class="stage-bar waterfall-foot">
+              <span>HZ</span>
+              <span>FM</span>
+            </div>
+          </div>
+
+          <!-- (c) 文字与指令栏 -->
+          <div class="hero-copy">
+            <p class="hero-subtitle" data-i18n="hero_subtitle">录下国际空间站过境时的 SSTV 音频，交给你的 AI。它会找到信号，逐行还原出 320×240 的原图。</p>
+
+            <div class="install-block" id="install">
+              <div class="cmd-tabs" role="tablist" aria-label="指令模式">
+                <button type="button" class="cmd-tab" role="tab" data-mode="install" aria-selected="true" data-i18n="tab_install">终端安装</button>
+                <button type="button" class="cmd-tab" role="tab" data-mode="prompt" aria-selected="false" data-i18n="tab_prompt">对 AI 说</button>
+              </div>
+
+              <div class="cmd-bar">
+                <span class="cmd-prefix" id="cmd-prefix" aria-hidden="true">$</span>
+                <code class="cmd-text" id="cmd-text">npx skills add BruceStyle/sstv-decoder</code>
+                <button type="button" class="copy-btn" id="copy-btn" data-i18n="copy_btn">复制</button>
+              </div>
+
+              <p class="compat-line" data-i18n="compat_line">适用于 Claude Code · Cursor · Codex · Antigravity · Gemini CLI 等 75+ 个 Agent</p>
+              <p class="footnote-line">
+                <span data-i18n="footnote_req">需要 FFmpeg 与 uv</span>
+                <span aria-hidden="true"> · </span>
+                <a href="https://github.com/BruceStyle/sstv-decoder" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 02 信号原理（亮色仪器手册纸面） -->
+    <section class="signal is-paper" id="signal" aria-labelledby="signal-title">
+      <div class="signal-transition" aria-hidden="true"></div>
+
+      <div class="container">
+        <p class="section-tag" data-i18n="signal_tag">02 · 信号原理</p>
+
+        <h2 class="signal-title" id="signal-title">
+          <span data-i18n="signal_title_1">每一行像素，</span><span data-i18n="signal_title_2">都是 150 毫秒的音调</span>
+        </h2>
+
+        <p class="signal-lead" data-i18n="signal_lead">Robot 36 把图像的亮度和色彩编码成 1200 到 2300 Hz 之间的频率。在左边的图上选一行，看看它在电波里长什么样。</p>
+
+        <div class="diagram-grid">
+          <div class="diagram-picker">
+            <div class="thumb-wrap" id="thumb-wrap">
+              <img
+                id="thumb-img"
+                src="assets/decoded-iss-2026-10-06.png"
+                alt="2026 年 10 月 6 日国际空间站解码原图，点击或拖动选择扫描行"
+                width="320"
+                height="240"
+              >
+              <div class="thumb-scanline" id="thumb-scanline" aria-hidden="true"></div>
+            </div>
+
+            <div class="slider-wrap">
+              <label class="sr-only" for="line-slider" data-i18n="slider_label">选择扫描行</label>
+              <input type="range" id="line-slider" class="line-slider" min="0" max="239" value="120">
+            </div>
+
+            <div class="picker-readout" id="picker-readout">LINE 120 / 240 · R-Y</div>
+          </div>
+
+          <div class="diagram-scope">
+            <div class="scope-frame">
+              <canvas id="scope-canvas" aria-label="Robot 36 单行 150 毫秒频率波形图"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div class="chain-wrap">
+          <ol class="signal-chain" aria-label="信号接收与解码链路">
+            <li class="chain-step is-user">
+              <span class="step-num">01</span>
+              <h3 data-i18n="step_1_title">过境预报</h3>
+              <p data-i18n="step_1_desc">查好国际空间站飞过头顶的时间</p>
+              <span class="step-owner" data-i18n="owner_you">你</span>
+            </li>
+            <li class="chain-step is-user">
+              <span class="step-num">02</span>
+              <h3 data-i18n="step_2_title">录音</h3>
+              <p data-i18n="step_2_desc">手台对准天空，把 145.800 MHz 录成音频</p>
+              <span class="step-owner" data-i18n="owner_you">你</span>
+            </li>
+            <li class="chain-step is-plugin is-handover">
+              <span class="handover-label" data-i18n="handover_label">插件从这里接管</span>
+              <span class="step-num">03</span>
+              <h3 data-i18n="step_3_title">寻帧</h3>
+              <p data-i18n="step_3_desc">在整段录音里找到 VIS 08 识别头</p>
+              <span class="step-owner"><span class="owner-dot" aria-hidden="true"></span><span data-i18n="owner_plugin">插件</span></span>
+            </li>
+            <li class="chain-step is-plugin">
+              <span class="step-num">04</span>
+              <h3 data-i18n="step_4_title">行同步</h3>
+              <p data-i18n="step_4_desc">校准 150 ms 扫描时钟，抵消多普勒漂移</p>
+              <span class="step-owner"><span class="owner-dot" aria-hidden="true"></span><span data-i18n="owner_plugin">插件</span></span>
+            </li>
+            <li class="chain-step is-plugin">
+              <span class="step-num">05</span>
+              <h3 data-i18n="step_5_title">成像</h3>
+              <p data-i18n="step_5_desc">输出 320×240 PNG 和同步报告</p>
+              <span class="step-owner"><span class="owner-dot" aria-hidden="true"></span><span data-i18n="owner_plugin">插件</span></span>
+            </li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- 03 实测档案（暗底） -->
+    <section class="captures" id="captures" aria-labelledby="captures-title">
+      <div class="container">
+        <p class="section-tag" data-i18n="captures_tag">03 · 实测档案</p>
+
+        <h2 class="section-title" id="captures-title">
+          <span data-i18n="captures_title_1">两次过境，</span> <span data-i18n="captures_title_2">两张来自太空的明信片</span>
+        </h2>
+
+        <div class="captures-head">
+          <p class="section-lead" data-i18n="captures_lead">以下画面均由本插件从真实录音中解出，未经修图。</p>
+
+          <div class="cmd-tabs render-tabs" role="tablist" aria-label="像素渲染切换">
+            <button type="button" class="cmd-tab render-tab" role="tab" data-render="pixelated" aria-selected="true" data-i18n="render_pixel">原始像素</button>
+            <button type="button" class="cmd-tab render-tab" role="tab" data-render="smooth" aria-selected="false" data-i18n="render_smooth">平滑视图</button>
+          </div>
+        </div>
+
+        <div class="capture-grid" id="capture-grid">
+          <figure class="capture capture-primary">
+            <div class="stage-bar">
+              <span>FRAME 02 · VIS 08</span>
+              <span>320 × 240</span>
+            </div>
+            <div class="capture-frame">
+              <img
+                src="assets/decoded-iss-2026-10-06.png"
+                alt="2026 年 10 月 6 日下午过境解码的国际空间站 ARISS 第 2 帧图像"
+                width="320"
+                height="240"
+                loading="lazy"
+              >
+              <span class="crop-mark tl" aria-hidden="true"></span>
+              <span class="crop-mark tr" aria-hidden="true"></span>
+              <span class="crop-mark bl" aria-hidden="true"></span>
+              <span class="crop-mark br" aria-hidden="true"></span>
+            </div>
+            <figcaption>
+              <h3 data-i18n="cap_1_title">ARISS 第 2 帧 · Student Education 2026</h3>
+              <dl class="spec-rows">
+                <div class="spec-row">
+                  <dt data-i18n="cap_date_dt">日期</dt>
+                  <dd data-i18n="cap_1_date">2026-10-06 下午过境</dd>
+                </div>
+                <div class="spec-row">
+                  <dt data-i18n="cap_offset_dt">录音位置</dt>
+                  <dd data-i18n="cap_1_offset">04:48 至 05:24</dd>
+                </div>
+                <div class="spec-row">
+                  <dt data-i18n="cap_channel_dt">声道</dt>
+                  <dd data-i18n="cap_1_channel">右声道</dd>
+                </div>
+                <div class="spec-row">
+                  <dt data-i18n="cap_sync_dt">同步覆盖</dt>
+                  <dd>98.3%</dd>
+                </div>
+                <div class="spec-row">
+                  <dt data-i18n="cap_output_dt">输出</dt>
+                  <dd>320 × 240 PNG</dd>
+                </div>
+              </dl>
+            </figcaption>
+          </figure>
+
+          <figure class="capture capture-secondary">
+            <div class="stage-bar">
+              <span>SLIDE · VIS 08</span>
+              <span>320 × 240</span>
+            </div>
+            <div class="capture-frame">
+              <img
+                src="assets/decoded-iss-2026-10-05.png"
+                alt="2026 年 10 月 5 日过境解码的 Sputnik-1 纪念慢扫描电视图像"
+                width="320"
+                height="240"
+                loading="lazy"
+              >
+              <span class="crop-mark tl" aria-hidden="true"></span>
+              <span class="crop-mark tr" aria-hidden="true"></span>
+              <span class="crop-mark bl" aria-hidden="true"></span>
+              <span class="crop-mark br" aria-hidden="true"></span>
+            </div>
+            <figcaption>
+              <h3 data-i18n="cap_2_title">Sputnik-1 纪念图传</h3>
+              <dl class="spec-rows">
+                <div class="spec-row">
+                  <dt data-i18n="cap_date_dt">日期</dt>
+                  <dd data-i18n="cap_2_date">2026-10-05 过境</dd>
+                </div>
+                <div class="spec-row">
+                  <dt data-i18n="cap_call_dt">呼号</dt>
+                  <dd>NA1SS / RS0ISS</dd>
+                </div>
+                <div class="spec-row">
+                  <dt data-i18n="cap_recovery_dt">恢复方式</dt>
+                  <dd data-i18n="cap_2_recovery">弱信号噪声协方差恢复</dd>
+                </div>
+                <div class="spec-row">
+                  <dt data-i18n="cap_output_dt">输出</dt>
+                  <dd>320 × 240 PNG</dd>
+                </div>
+              </dl>
+            </figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- 04 接入方式（纸底） -->
+    <section class="access is-paper" id="access" aria-labelledby="access-title">
+      <div class="container">
+        <p class="section-tag" data-i18n="access_tag">04 · 接入方式</p>
+
+        <h2 class="section-title" id="access-title">
+          <span data-i18n="access_title_1">一条指令，</span> <span data-i18n="access_title_2">或者任何你习惯的方式</span>
+        </h2>
+
+        <p class="section-lead" data-i18n="access_lead">基于开放的 Agent Skills 与 MCP 标准，不绑定任何一家 AI 客户端，也不需要上架商店。</p>
+
+        <div class="access-grid">
+          <div class="access-col">
+            <span class="step-num">A</span>
+            <h3 data-i18n="acc_a_title">Agent Skill（推荐）</h3>
+            <p class="access-desc" data-i18n="acc_a_desc">一行安装到本机所有兼容的 Agent。</p>
+            <pre class="code-block"><code id="code-a">npx skills add BruceStyle/sstv-decoder</code></pre>
+            <button type="button" class="copy-mini" data-copy-target="code-a" data-i18n="copy_btn">复制</button>
+          </div>
+
+          <div class="access-col">
+            <span class="step-num">B</span>
+            <h3 data-i18n="acc_b_title">本地 MCP 服务</h3>
+            <p class="access-desc" data-i18n="acc_b_desc">适用于只支持 MCP 的客户端，如 Claude Desktop。</p>
+            <p class="access-hint" data-i18n="acc_b_hint">发布至 PyPI 前，请将 "uvx", "sstv-decoder-mcp" 替换为 "uvx", "--from", "git+https://github.com/BruceStyle/sstv-decoder", "sstv-decoder-mcp"。</p>
+            <pre class="code-block"><code id="code-b">{
+  "mcpServers": {
+    "sstv-decoder": {
+      "command": "uvx",
+      "args": ["sstv-decoder-mcp"]
+    }
+  }
+}</code></pre>
+            <button type="button" class="copy-mini" data-copy-target="code-b" data-i18n="copy_btn">复制</button>
+          </div>
+
+          <div class="access-col">
+            <span class="step-num">C</span>
+            <h3 data-i18n="acc_c_title">命令行</h3>
+            <p class="access-desc" data-i18n="acc_c_desc">不经过 AI，直接解码一段录音。</p>
+            <p class="access-hint" data-i18n="acc_c_hint">发布至 PyPI 前，请改用 uvx --from git+https://github.com/BruceStyle/sstv-decoder sstv-decoder ...。</p>
+            <pre class="code-block"><code id="code-c">uvx sstv-decoder inspect /path/to/iss_pass.m4a
+uvx sstv-decoder decode /path/to/iss_pass.m4a -o ./output_frames</code></pre>
+            <button type="button" class="copy-mini" data-copy-target="code-c" data-i18n="copy_btn">复制</button>
+          </div>
+        </div>
+
+        <p class="access-req">
+          <span data-i18n="access_req">环境要求：Python 3.11+ · FFmpeg / ffprobe · uv（推荐）</span>
+          <span aria-hidden="true"> · </span>
+          <a href="https://github.com/BruceStyle/sstv-decoder" target="_blank" rel="noopener noreferrer" data-i18n="access_docs">完整说明见 GitHub README ↗</a>
+        </p>
+      </div>
+    </section>
+
+    <!-- 05 关于作者（暗底） -->
+    <section class="about" id="about" aria-labelledby="about-title">
+      <div class="container about-grid">
+        <div class="about-copy">
+          <p class="section-tag" data-i18n="about_tag">05 · 关于作者</p>
+          <h2 class="section-title" id="about-title">
+            <span data-i18n="about_title_1">我在楼顶，</span> <span data-i18n="about_title_2">等过一次空间站</span>
+          </h2>
+          <p class="about-statement" data-i18n="about_statement">我是一名业余无线电爱好者。我希望把从空间站电波里解出图片这件事，交给每个人身边的 AI。</p>
+          <p class="about-p" data-i18n="about_p1">2026 年 10 月，我举着手台和便携八木天线在楼顶守候国际空间站过境，录下了来自 400 公里高空的音频信号，并借助 AI 把嘈杂频调声逐步还原成了清晰的太空明信片。</p>
+          <p class="about-p" data-i18n="about_p2">后来我曾将这套能力做成单一平台插件，却因为商店绑卡门槛没能上架。于是我决定改用开放的 Agent Skills 与 MCP 标准重构并彻底开源，统一成一条跨 Agent 指令，让每位同好都能直接用上。</p>
+        </div>
+
+        <aside class="qsl-card" aria-label="QSL 确认卡片">
+          <div class="qsl-head">
+            <div class="qsl-mark">
+              <span class="owner-dot" aria-hidden="true"></span>
+              <span class="qsl-title">QSL</span>
+            </div>
+            <div class="qsl-stamp">
+              <img
+                src="assets/decoded-iss-2026-10-06.png"
+                alt="2026 年 10 月 6 日国际空间站 ARISS 解码图传邮票缩略图"
+                width="320"
+                height="240"
+                loading="lazy"
+              >
+            </div>
+          </div>
+
+          <p class="qsl-to" data-i18n="qsl_to">TO · 每一位同好</p>
+
+          <dl class="qsl-fields">
+            <div class="qsl-field">
+              <dt>CALL</dt>
+              <dd class="qsl-callsign">BA8CPC</dd>
+            </div>
+            <div class="qsl-field">
+              <dt>FROM</dt>
+              <dd>BruceStyle</dd>
+            </div>
+            <div class="qsl-field">
+              <dt data-i18n="qsl_role_dt">身份</dt>
+              <dd data-i18n="qsl_role_dd">业余无线电爱好者 · 开源作者</dd>
+            </div>
+            <div class="qsl-field">
+              <dt>FREQ</dt>
+              <dd>145.800 MHz FM</dd>
+            </div>
+            <div class="qsl-field">
+              <dt>MODE</dt>
+              <dd>SSTV Robot 36</dd>
+            </div>
+            <div class="qsl-field">
+              <dt data-i18n="qsl_repo_dt">仓库</dt>
+              <dd><a href="https://github.com/BruceStyle/sstv-decoder" target="_blank" rel="noopener noreferrer">github.com/BruceStyle/sstv-decoder</a></dd>
+            </div>
+            <div class="qsl-field">
+              <dt data-i18n="qsl_email_dt">邮箱</dt>
+              <dd><a href="mailto:shuaistyle.os@gmail.com">shuaistyle.os@gmail.com</a></dd>
+            </div>
+            <div class="qsl-field">
+              <dt data-i18n="qsl_license_dt">协议</dt>
+              <dd>MIT</dd>
+            </div>
+          </dl>
+
+          <p class="qsl-sign">TNX FOR LISTENING · 73 DE BA8CPC</p>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <a class="brand" href="#top">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">SSTV DECODER</span>
+      </a>
+      <div class="footer-links">
+        <a href="https://github.com/BruceStyle/sstv-decoder" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+        <a href="https://github.com/BruceStyle/sstv-decoder/blob/main/skills/sstv-decoder/SKILL.md" target="_blank" rel="noopener noreferrer">SKILL.md ↗</a>
+        <a href="#top" data-i18n="footer_top">返回顶部</a>
+      </div>
+      <span class="footer-copy">© 2026 BruceStyle · MIT License</span>
+    </div>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>

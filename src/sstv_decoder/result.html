@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Robot 36 SSTV Results</title>
+  <style>
+    :root { color-scheme: light dark; font: 14px/1.45 system-ui, sans-serif; }
+    body { margin: 0; }
+    main { padding: 12px; }
+    #status { margin: 0 0 12px; }
+    #frames { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 12px; }
+    article { border: 1px solid color-mix(in srgb, currentColor 20%, transparent); border-radius: 10px; overflow: hidden; }
+    img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: contain; background: #202020; }
+    .details { padding: 10px; }
+    h2, p { margin: 0 0 4px; }
+    h2 { font-size: 1em; }
+    a { display: inline-block; padding-block: 4px; color: LinkText; }
+  </style>
+</head>
+<body>
+<main>
+  <p id="status" role="status">Checking recording…</p>
+  <div id="frames"></div>
+</main>
+<script>
+  const status = document.getElementById("status");
+  const frames = document.getElementById("frames");
+  const empty = {
+    no_signal: "No valid Robot 36 signal detected. Ensure the recording includes ~1s before the VIS header.",
+    insufficient_signal: "Detected Robot 36 VIS header, but subsequent scan signal was insufficient.",
+    unsupported_mode: "Detected other SSTV mode(s). This release decodes Robot 36."
+  };
+
+  function timecode(seconds) {
+    const whole = Math.floor(seconds);
+    const minutes = Math.floor(whole / 60);
+    return String(minutes).padStart(2, "0") + ":" + String(whole % 60).padStart(2, "0");
+  }
+
+  function render(result) {
+    const report = result?.structuredContent;
+    if (!report && !result?.isError) return;
+    frames.replaceChildren();
+    if (!report) {
+      status.textContent = result.content?.[0]?.text || "Failed to decode recording.";
+      return;
+    }
+    status.textContent = report.frames.length
+      ? `Robot 36 · ${report.frames.length} frame(s)`
+      : empty[report.status] || "No image frames recovered.";
+    for (const frame of report.frames) {
+      const article = document.createElement("article");
+      const image = document.createElement("img");
+      image.src = frame.png_url;
+      image.alt = `SSTV Frame ${frame.number}`;
+      image.width = frame.width;
+      image.height = frame.height;
+      image.loading = "lazy";
+      image.referrerPolicy = "no-referrer";
+      image.addEventListener("error", () => { image.alt = "Preview expired. Please re-decode the recording."; });
+      const details = document.createElement("div");
+      details.className = "details";
+      const heading = document.createElement("h2");
+      heading.textContent = `Frame ${frame.number} · ${frame.status === "partial" ? "Partial" : "Decoded"}`;
+      const timing = document.createElement("p");
+      timing.textContent = `${timecode(frame.start_seconds)}–${timecode(frame.end_seconds)} · ${frame.channel}`;
+      if (frame.received_rows < frame.height) {
+        timing.textContent += ` · ${frame.received_rows}/${frame.height} rows`;
+      }
+      const link = document.createElement("a");
+      link.href = frame.png_url + "?download=1";
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = "Download PNG";
+      details.append(heading, timing, link);
+      article.append(image, details);
+      frames.append(article);
+    }
+  }
+
+  function send(message) {
+    window.parent.postMessage({ jsonrpc: "2.0", ...message }, "*");
+  }
+  window.addEventListener("message", (event) => {
+    if (event.source !== window.parent || event.data?.jsonrpc !== "2.0") return;
+    if (event.data.id === 1 && event.data.result) {
+      send({ method: "ui/notifications/initialized", params: {} });
+    } else if (event.data.method === "ui/notifications/tool-result") {
+      render(event.data.params);
+    }
+  });
+  send({
+    id: 1,
+    method: "ui/initialize",
+    params: { appInfo: { name: "SSTV Decoder", version: "0.1.0" }, appCapabilities: {}, protocolVersion: "2026-01-26" }
+  });
+</script>
+</body>
+</html>
